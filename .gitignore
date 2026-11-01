@@ -1,0 +1,6 @@
+# search state and logs, created on first run
+data/
+# build output
+engine/build/
+bin/
+__pycache__/

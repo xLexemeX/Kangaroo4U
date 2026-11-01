@@ -1,0 +1,954 @@
+<title>Kangaroo4U</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* ---------------------------------------------------------------- tokens */
+:root{
+  --bg:#f7f8fb; --panel:#ffffff; --sunken:#f1f4f9; --raise:#ffffff;
+  --line:#e4e8f0; --line-2:#c9d2e0; --mid:#dce2ec;
+  --ink:#0e131c; --ink-2:#48546a; --ink-3:#8590a3;
+  --tame:#B26A16; --wild:#1785B8;
+  --good:#157f4e; --warn:#9a6207; --bad:#b3352b; --off:#8590a3;
+  --shadow:0 1px 2px rgba(16,24,40,.05), 0 12px 32px -20px rgba(16,24,40,.28);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#090c11; --panel:#12161f; --sunken:#0d111a; --raise:#171c27;
+  --line:#1f2734; --line-2:#333e52; --mid:#2a3342;
+  --ink:#e9eef7; --ink-2:#a2adbf; --ink-3:#6c7789;
+  --tame:#C67C1D; --wild:#2A93C6;
+  --good:#3fd486; --warn:#e0a33a; --bad:#e0574f; --off:#6c7789;
+  --shadow:0 1px 0 rgba(255,255,255,.02), 0 24px 60px -32px rgba(0,0,0,.8);
+}}
+:root[data-theme="dark"]{
+  --bg:#090c11; --panel:#12161f; --sunken:#0d111a; --raise:#171c27;
+  --line:#1f2734; --line-2:#333e52; --mid:#2a3342;
+  --ink:#e9eef7; --ink-2:#a2adbf; --ink-3:#6c7789;
+  --tame:#C67C1D; --wild:#2A93C6;
+  --good:#3fd486; --warn:#e0a33a; --bad:#e0574f; --off:#6c7789;
+  --shadow:0 1px 0 rgba(255,255,255,.02), 0 24px 60px -32px rgba(0,0,0,.8);
+}
+/* the one colour that moves: the run's own state, set from the data */
+body{--state:var(--off)}
+body[data-state="producing"]{--state:var(--good)}
+body[data-state="starting"]{--state:var(--warn)}
+body[data-state="stalled"]{--state:var(--bad)}
+
+/* ------------------------------------------------------------------ base */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0; background:var(--bg); color:var(--ink); font-size:16px; line-height:1.6;
+  font-family:"IBM Plex Sans",system-ui,sans-serif; -webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.disp{font-family:"Archivo","Archivo Expanded",system-ui,sans-serif; font-stretch:110%}
+h1,h2,h3{margin:0; font-family:"Archivo",system-ui,sans-serif; text-wrap:balance}
+.shell{max-width:1180px; margin:0 auto; padding:0 clamp(16px,3.5vw,36px) 96px}
+.eyebrow{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.24em;
+  text-transform:uppercase; color:var(--ink-3)}
+.note{color:var(--ink-2); font-size:14.5px; max-width:66ch; margin:8px 0 0}
+.note b{color:var(--ink); font-weight:600}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--state); outline-offset:3px; border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+
+/* --------------------------------------------------------------- top bar */
+.topbar{position:sticky; top:0; z-index:40; background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(14px); border-bottom:1px solid var(--line)}
+.topbar-in{max-width:1180px; margin:0 auto; padding:0 clamp(16px,3.5vw,36px);
+  height:54px; display:flex; align-items:center; gap:14px}
+.tb-dot{width:8px; height:8px; border-radius:50%; background:var(--state); flex:none}
+.tb-id{font-size:12px; letter-spacing:.06em; color:var(--ink-2); white-space:nowrap}
+.tb-gap{flex:1}
+.tb-meta{font-size:11.5px; color:var(--ink-3); white-space:nowrap}
+.tb-btn{appearance:none; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+  padding:6px 10px; border-radius:7px; cursor:pointer}
+.tb-btn:hover{color:var(--ink); border-color:var(--line-2)}
+.chip{display:inline-flex; align-items:center; gap:8px; padding:5px 11px 5px 9px; border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--state) 40%,var(--line));
+  background:color-mix(in srgb,var(--state) 10%,transparent);
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink); white-space:nowrap}
+.chip-led{width:7px; height:7px; border-radius:50%; background:var(--state); flex:none}
+body[data-state="producing"] .chip-led{animation:led 2.4s ease-out infinite}
+@keyframes led{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--good) 60%,transparent)}
+  70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+/* ------------------------------------------------------------------ hero */
+.hero{position:relative; padding:clamp(30px,5vw,60px) 0 clamp(26px,4vw,44px)}
+.hero::before{content:""; position:absolute; left:-10%; right:-10%; top:-40px; height:340px; z-index:-1;
+  background:radial-gradient(60% 100% at 26% 0%, color-mix(in srgb,var(--state) 13%,transparent), transparent 70%);
+  pointer-events:none}
+/* The title spans the top and the readout sits under it at full width. */
+.ro-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:clamp(14px,1.8vw,22px); align-items:stretch; margin-top:clamp(16px,2.4vw,28px)}
+.ro-row .readout{display:flex; flex-direction:column}
+.ro-row .readout .ro-axis{margin-top:auto; padding-top:4px}
+h1{font-weight:800; font-stretch:112%; text-transform:uppercase; letter-spacing:-.005em;
+  font-size:clamp(32px,5.6vw,60px); line-height:.94; margin:.24em 0 .3em}
+
+/* The state accent is the panel's own top border. It used to be a 2px strip
+   positioned over the top edge while carrying a 16px corner radius, a radius
+   eight times its own height, so the browser tapered both ends and it read as a
+   broken line with a step in it. A real border follows the rounded corner
+   exactly and cannot come apart from the panel. */
+.readout{position:relative; background:var(--panel); border:1px solid var(--line);
+  border-top:2px solid var(--state);
+  border-radius:16px; padding:20px 22px 18px; box-shadow:var(--shadow)}
+.ro-k{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--ink-3)}
+.ro-fig{font-family:"IBM Plex Mono",monospace; font-weight:600; font-variant-numeric:tabular-nums;
+  font-size:clamp(38px,5.4vw,54px); line-height:1; letter-spacing:-.05em; margin:10px 0 0}
+.ro-fig.zero{color:var(--ink-3)}
+.ro-u{font-size:.34em; font-weight:500; color:var(--ink-3); margin-left:6px; letter-spacing:0}
+.ro-sub{font-size:13px; color:var(--ink-2); margin-top:8px; min-height:1.6em}
+.ro-spark{display:block; width:100%; height:52px; margin-top:14px; overflow:visible;
+  cursor:crosshair; touch-action:none}
+.ro-spark .xh{stroke:var(--ink-3); stroke-width:1; stroke-dasharray:2 2; opacity:.7}
+.ro-fig.scrub{color:var(--ink-2)}
+.ro-axis .live{color:var(--state); font-weight:600}
+.ro-axis{display:flex; justify-content:space-between; font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px; color:var(--ink-3); margin-top:4px}
+.ro-facts{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:clamp(12px,1.6vw,20px); margin-top:clamp(14px,1.8vw,20px);
+  padding-top:16px; border-top:1px solid var(--line)}
+.fact{display:flex; flex-direction:column; gap:5px; min-width:0}
+.fact .fk{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3)}
+.fact .fv{font-family:"IBM Plex Mono",monospace; font-size:17px; font-weight:600;
+  font-variant-numeric:tabular-nums; color:var(--ink); overflow-wrap:anywhere}
+@media(max-width:700px){ .tb-meta{display:none} }
+@media(max-width:520px){ .tb-id{display:none} }
+
+/* ------------------------------------------------- the band (signature) */
+.band{padding:clamp(14px,3vw,26px) 0 clamp(24px,4vw,40px); border-top:1px solid var(--line)}
+.band-hd{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap}
+.band h2{font-weight:600; font-stretch:106%; font-size:clamp(19px,2.4vw,24px); letter-spacing:-.01em}
+.legend{display:flex; gap:16px; align-items:center; flex-wrap:wrap; font-size:13px; color:var(--ink-2)}
+.legend .li{display:inline-flex; align-items:center; gap:7px; white-space:nowrap}
+.legend .mk{width:11px; height:11px; border-radius:3px; flex:none}
+.band-wrap{position:relative; margin-top:clamp(18px,3vw,30px)}
+#band{display:block; width:100%; height:clamp(240px,27vw,340px)}
+.zone{position:absolute; left:0; font-family:"IBM Plex Mono",monospace; font-size:10.5px;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3); pointer-events:none}
+.zone.t{top:0} .zone.w{bottom:0}
+.band-axis{position:relative}
+.band-zero{position:absolute; transform:translateX(-50%)}
+.pk{position:absolute; transform:translateX(-50%); font-family:"IBM Plex Mono",monospace;
+  font-size:11px; color:var(--ink-2); white-space:nowrap; pointer-events:none}
+.pk.t{top:0} .pk.w{bottom:0}
+.iqr{position:absolute; height:7px; pointer-events:none; opacity:.8}
+.iqr.t{top:23px; border:1px solid var(--tame); border-top:0}
+.iqr.w{bottom:23px; border:1px solid var(--wild); border-bottom:0}
+.cross{position:absolute; top:0; bottom:0; width:1px; background:var(--line-2); opacity:0;
+  pointer-events:none}
+.tip{position:absolute; z-index:6; pointer-events:none; opacity:0; transform:translate(-50%,-135%);
+  background:var(--ink); color:var(--bg); font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+  padding:6px 9px; border-radius:7px; white-space:nowrap; transition:opacity .1s}
+.band-axis{display:flex; justify-content:space-between; font-family:"IBM Plex Mono",monospace;
+  font-size:11px; color:var(--ink-3); margin-top:10px}
+.numbers{margin-top:20px; border-top:1px solid var(--line); padding-top:14px}
+.numbers summary{cursor:pointer; font-family:"IBM Plex Mono",monospace; font-size:11px;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3)}
+.numbers summary:hover{color:var(--ink-2)}
+.flag{margin-top:16px; display:flex; gap:12px; align-items:flex-start; padding:13px 15px;
+  border-radius:11px; background:color-mix(in srgb,var(--warn) 8%,var(--sunken));
+  border:1px solid color-mix(in srgb,var(--warn) 26%,var(--line)); font-size:13.5px; color:var(--ink-2)}
+.flag b{color:var(--ink); font-weight:600}
+.flag-i{flex:none; font-family:"IBM Plex Mono",monospace; color:var(--warn); font-weight:600}
+.flag.ok{background:color-mix(in srgb,var(--good) 8%,var(--sunken));
+  border-color:color-mix(in srgb,var(--good) 26%,var(--line))}
+.flag.ok .flag-i{color:var(--good)}
+
+/* ----------------------------------------------------------------- cards */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:16px;
+  padding:clamp(18px,2.6vw,28px); margin-top:20px; box-shadow:var(--shadow)}
+.card h2{font-weight:600; font-stretch:106%; font-size:clamp(18px,2.2vw,22px); letter-spacing:-.01em}
+.card h3{font-weight:600; font-stretch:104%; font-size:15px; margin-top:26px}
+.duo{display:grid; grid-template-columns:1.18fr 1fr; gap:20px; align-items:start}
+@media(max-width:900px){ .duo{grid-template-columns:1fr} }
+
+/* ------------------------------------------------------------- log rails */
+.rail-row{margin-top:26px}
+.rail-k{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--ink-3)}
+.rail{position:relative; height:74px; margin-top:6px}
+.rail-track{position:absolute; left:0; right:0; top:38px; height:7px; border-radius:4px;
+  background:var(--sunken); border:1px solid var(--line); overflow:hidden}
+.rail-track i{display:block; height:100%; background:var(--tame)}
+.rail-tick{position:absolute; top:49px; width:1px; height:7px; background:var(--line-2)}
+.rail-tlab{position:absolute; top:60px; transform:translateX(-50%);
+  font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-3); white-space:nowrap}
+.rail-mk{position:absolute; top:33px; width:17px; height:17px; margin-left:-8.5px; border-radius:50%;
+  border:2.5px solid var(--panel)}
+.rail-mk.now{background:var(--tame)}
+.rail-mk.goal{background:var(--wild)}
+.rail-lab{position:absolute; top:4px; transform:translateX(-50%); white-space:nowrap;
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink)}
+.rail-lab i{display:block; font-style:normal; font-size:10px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:2px}
+.rail-lab.right{transform:translateX(-100%)}
+.rail-foot{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3); margin-top:22px}
+.reality{margin-top:22px; padding-top:20px; border-top:1px solid var(--line)}
+.reality-fig{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:clamp(24px,3.4vw,34px);
+  letter-spacing:-.02em; line-height:1.1}
+.reality-fig .mono{color:var(--wild)}
+.reality-fig em{font-family:"Archivo",system-ui,sans-serif; font-stretch:104%; font-style:normal;
+  font-weight:600; color:var(--ink)}
+.reality p{color:var(--ink-2); font-size:14.5px; max-width:70ch; margin:12px 0 0}
+.reality b{color:var(--ink); font-weight:600}
+
+/* ------------------------------------------------------------ mix field */
+.field-wrap{position:relative; margin-top:18px}
+#field{display:block; width:100%; height:auto; border-radius:11px; background:var(--sunken);
+  border:1px solid var(--line)}
+.scale{display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3)}
+.scale-ramp{display:flex; gap:2px}
+.scale-ramp i{width:16px; height:9px; border-radius:2px}
+.stat-line{margin-top:14px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 14px;
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-2)}
+.stat-line b{color:var(--ink); font-weight:600; text-align:right; font-variant-numeric:tabular-nums}
+/* Units and measured constants belong next to the title now that the
+   explanatory prose is gone: quieter than the heading, still readable. */
+.hu{font-family:"IBM Plex Mono",monospace; font-weight:400; font-stretch:normal;
+  font-size:12.5px; color:var(--ink-3); letter-spacing:0; white-space:normal}
+.units{margin-top:10px; font-family:"IBM Plex Mono",monospace; font-size:12.5px;
+  color:var(--ink-2); line-height:1.5}
+.units b{color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums}
+
+/* ------------------------------------------------------------ walk chart */
+.walk{display:block; width:100%; height:120px; margin-top:18px; overflow:visible}
+.walk-line{fill:none; stroke:var(--ink-2); stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
+.walk-band{fill:var(--mid)}
+.walk-mean{stroke:var(--line-2); stroke-width:1}
+.bal{display:flex; height:12px; gap:2px; margin-top:12px}
+.bal i{display:block; border-radius:3px}
+.bal-t{background:var(--tame)} .bal-w{background:var(--wild)}
+.bal-lab{display:flex; justify-content:space-between; margin-top:9px;
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-2)}
+.bal-lab .li{display:inline-flex; align-items:center; gap:6px}
+.bal-lab .mk{width:9px; height:9px; border-radius:2px}
+
+/* --------------------------------------------------------------- machine */
+.gpu-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:12px; margin-top:20px}
+.gpu-tile{background:var(--sunken); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.gpu-tile .k{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3)}
+.gpu-tile .v{font-family:"IBM Plex Mono",monospace; font-size:21px; margin-top:5px; color:var(--ink)}
+.gpu-tile .s{font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3); margin-top:2px}
+.meter{height:5px; border-radius:3px; margin-top:11px; overflow:hidden;
+  background:color-mix(in srgb,var(--good) 16%,var(--sunken))}
+.meter i{display:block; height:100%; background:var(--good)}
+.meter.warn{background:color-mix(in srgb,var(--warn) 16%,var(--sunken))}
+.meter.warn i{background:var(--warn)}
+.meter.bad{background:color-mix(in srgb,var(--bad) 16%,var(--sunken))}
+.meter.bad i{background:var(--bad)}
+.tbl{width:100%; border-collapse:collapse; margin-top:18px;
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px}
+.tbl th{text-align:left; font-weight:500; font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); padding:0 12px 8px 0; border-bottom:1px solid var(--line); white-space:nowrap}
+.tbl td{padding:9px 12px 9px 0; border-bottom:1px solid var(--line); color:var(--ink-2);
+  font-variant-numeric:tabular-nums}
+.tbl td.hi{color:var(--ink)}
+.tbl-wrap{overflow-x:auto}
+
+/* ---------------------------------------------------------------- footer */
+.foot{margin-top:34px; padding-top:20px; border-top:1px solid var(--line);
+  color:var(--ink-3); font-size:13px; line-height:1.75}
+.foot b{color:var(--ink-2); font-weight:600}
+.specs{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px}
+.specs span{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-2);
+  border:1px solid var(--line); border-radius:6px; padding:4px 9px; background:var(--panel)}
+
+/* ------------------------------------------------------- solved takeover */
+#solved{display:none}
+#solved.on{display:block; position:sticky; top:0; z-index:60; background:var(--good); color:#04140b;
+  font-family:"Archivo",sans-serif; font-weight:900; font-stretch:112%; text-transform:uppercase;
+  text-align:center; padding:18px 20px; letter-spacing:.01em; font-size:clamp(17px,3vw,29px);
+  line-height:1.25; box-shadow:0 8px 28px rgba(0,0,0,.3); animation:solved 1.1s ease-in-out infinite}
+#solved .sub{display:block; font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:12.5px;
+  letter-spacing:.03em; text-transform:none; margin-top:8px; color:#0a3a22}
+@keyframes solved{0%,100%{filter:brightness(1)}50%{filter:brightness(1.13)}}
+</style>
+
+<div id="solved" role="alert"></div>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <span class="tb-dot"></span>
+    <span class="tb-id mono" id="tb-id">secp256k1</span>
+    <span class="chip"><span class="chip-led"></span><span id="chip-txt">connecting</span></span>
+    <span class="tb-gap"></span>
+    <span class="tb-meta" id="tb-meta"></span>
+    <button class="tb-btn" id="theme-btn" type="button" aria-label="Switch between the light and dark theme">theme</button>
+  </div>
+</div>
+
+<main class="shell">
+  <section class="hero">
+    <p class="eyebrow" id="eyebrow">interval ECDLP · SOTA v2</p>
+    <h1>Kangaroo4U</h1>
+    <div class="ro-row">
+      <div class="readout">
+        <div class="ro-k">rate</div>
+        <div class="ro-fig mono" id="ro-fig">0.00<span class="ro-u">Gj/s</span></div>
+        <div class="ro-sub" id="ro-sub">reading the solver log…</div>
+        <svg class="ro-spark" id="ro-spark" viewBox="0 0 320 52" preserveAspectRatio="none" role="img" aria-label="Recent rate history"></svg>
+        <div class="ro-axis"><span id="spark-lo">·</span><span id="spark-hi">now</span></div>
+      </div>
+    </div>
+    <div class="ro-facts" id="ro-facts"></div>
+  </section>
+
+  <section class="card">
+    <div id="gpus"></div>
+  </section>
+
+  <section class="card">
+    <h2>Progress <span class="hu">· log scale</span></h2>
+    <div class="units">collision expected near <span class="mono" id="need-ops">…</span> ops · <span class="mono" id="need-dps">…</span> DPs at dp=<span class="mono" id="need-dp">…</span></div>
+    <div class="rail-row"><div class="rail-k">distinguished points banked</div><div class="rail" id="rail-dp"></div></div>
+    <div class="rail-row"><div class="rail-k">group operations performed</div><div class="rail" id="rail-ops"></div></div>
+    <p class="rail-foot">powers of ten · each step is ten times the last</p>
+    <div class="reality">
+      <div class="reality-fig"><span class="mono" id="frac">…</span> <em>of the expected work</em></div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-hd">
+      <div>
+        <h2>Herd distances <span class="hu">· units of 2<sup id="unit-exp">134</sup> · each herd scaled to its own peak</span></h2>
+      </div>
+      <div class="legend">
+        <span class="li"><span class="mk" style="background:var(--tame)"></span>tame herd</span>
+        <span class="li"><span class="mk" style="background:var(--wild)"></span>wild herd</span>
+      </div>
+    </div>
+    <div class="band-wrap">
+      <svg id="band" viewBox="0 0 1200 320" preserveAspectRatio="none" role="img" aria-label="Distance distribution of both herds"></svg>
+      <span class="zone t">tame ▲</span><span class="zone w">wild ▼</span>
+      <div class="iqr t" id="iqr-t"></div><div class="iqr w" id="iqr-w"></div>
+      <span class="pk t" id="pk-t"></span><span class="pk w" id="pk-w"></span>
+      <div class="cross" id="cross"></div>
+      <div class="tip" id="btip"></div>
+    </div>
+    <div class="band-axis"><span id="band-lo">·</span><span class="band-zero" id="band-zero">0</span><span id="band-hi">·</span></div>
+    <div id="band-flag"></div>
+    <details class="numbers">
+      <summary>Read the herds as numbers</summary>
+      <div class="tbl-wrap"><table class="tbl" id="band-tbl"></table></div>
+    </details>
+  </section>
+
+  <div class="duo">
+    <section class="card" style="margin-top:20px">
+      <h2>Field mix <span class="hu">· <span class="mono" id="grid-dims">…</span> fold · σ from table mix</span></h2>
+      <div class="field-wrap"><canvas id="field" width="720" height="400"></canvas><div class="tip" id="ftip"></div></div>
+      <div class="scale">
+        <span>tame heavy</span>
+        <span class="scale-ramp" id="scale-ramp"></span>
+        <span>wild heavy</span>
+        <span style="margin-left:auto">±3σ</span>
+      </div>
+      <div class="stat-line" id="field-stats"></div>
+    </section>
+
+    <section class="card" style="margin-top:20px">
+      <h2>Walk quality <span class="hu">· byte 11 · 256 buckets · shaded lane is ±3σ</span></h2>
+      <svg class="walk" id="walk" viewBox="0 0 480 120" preserveAspectRatio="none" role="img" aria-label="Leading byte distribution against its expected range"></svg>
+      <div class="ro-axis"><span>0x00</span><span>256 buckets</span><span>0xFF</span></div>
+      <div class="stat-line" id="walk-stats"></div>
+      <h3>Table occupancy <span class="hu">· byte 0 · 256 list groups · exact</span></h3>
+      <svg class="walk" id="occ" viewBox="0 0 480 90" preserveAspectRatio="none" role="img" aria-label="Records per outer list index"></svg>
+      <div class="ro-axis"><span>0x00</span><span>256 list groups</span><span>0xFF</span></div>
+      <div class="stat-line" id="occ-stats"></div>
+      <h3>Herd balance</h3>
+      <div class="units" id="bal-note"></div>
+      <div class="bal" id="bal"></div>
+      <div class="bal-lab" id="bal-lab"></div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <div class="specs" id="specs"></div>
+    <div id="foot-txt"></div>
+  </footer>
+</main>
+
+<script>
+const POLL_MS=15000;
+let CUR=null;
+
+/* ------------------------------------------------------------- utilities */
+const css=()=>getComputedStyle(document.documentElement);
+const col=n=>css().getPropertyValue(n).trim();
+const fmt=n=>Number(n).toLocaleString('en-US');
+const SUPS={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+const sup=n=>String(n).split('').map(c=>SUPS[c]||c).join('');
+const sci=(x,d=2)=>{ if(!isFinite(x)||x<=0) return '0';
+  const e=Math.floor(Math.log10(x)); return (x/Math.pow(10,e)).toFixed(d)+'×10'+sup(e); };
+const compact=x=>{ x=Number(x)||0;
+  for(const [v,u] of [[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'K']]) if(x>=v) return (x/v).toFixed(2)+u;
+  return fmt(Math.round(x)); };
+const YEAR=31557600;
+function dur(s){
+  if(!isFinite(s)||s<=0) return '–';
+  if(s>=YEAR){ const y=s/YEAR; return (y>=1000?fmt(Math.round(y/100)*100):y.toFixed(y<10?1:0))+' yr'; }
+  if(s>=86400) return (s/86400).toFixed(1)+' d';
+  if(s>=3600) return (s/3600).toFixed(1)+' h';
+  return Math.round(s/60)+' m';
+}
+function ago(s){
+  if(s==null) return 'never';
+  if(s<90) return Math.round(s)+'s ago';
+  if(s<5400) return Math.round(s/60)+'m ago';
+  if(s<172800) return (s/3600).toFixed(1)+'h ago';
+  return Math.round(s/86400)+'d ago';
+}
+const clock=t=>new Date(t*1000).toLocaleTimeString([],{hour12:false});
+function hex2rgb(h){ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join('');
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+const mix=(a,b,t)=>'rgb('+a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')+')';
+
+/* ------------------------------------------------------------ state chip */
+const STATE={
+  producing:{txt:'searching',   sub:g=>'the solver is working'},
+  starting :{txt:'starting',    sub:g=>'solver up, first report pending'},
+  stalled  :{txt:'stalled',     sub:g=>'solver process up but silent'},
+  idle     :{txt:'idle',        sub:g=>'the solver is not running'}
+};
+function applyState(D){
+  const L=D.local||{};
+  const st=L.status||'idle';
+  document.body.dataset.state=st;
+  const bits=[STATE[st]?STATE[st].txt:st];
+  const nc=((D.gpu||{}).cards||[]).length;
+  if(nc>1) bits.push(nc+' GPUs');
+  document.getElementById('chip-txt').textContent=bits.join(' · ');
+}
+
+/* The history chart scrubs. The entry carries the ids it owns and the readings
+   last drawn, so a pointer can map back to a sample without recomputing the
+   layout. */
+const CH={
+  rate:{el:'ro-spark', fig:'ro-fig',  lo:'spark-lo', hi:'spark-hi', xh:'spark-xh',
+        unit:'Gj/s',                  dp:2, scrubbed:false, st:null}
+};
+
+/* ---------------------------------------------------------- hero readout */
+function renderHero(D){
+  const L=D.local||{};
+  const total=D.rate_mjs||0, g=total/1000;
+  const fig=document.getElementById('ro-fig');
+  // a refresh lands every few seconds; while a finger is on the chart the
+  // headline belongs to the scrub, not to now
+  if(!CH.rate.scrubbed){
+    fig.innerHTML=g.toFixed(2)+'<span class="ro-u">Gj/s</span>';
+    fig.classList.toggle('zero',!(total>0));
+  }
+
+  const cards=((D.gpu||{}).cards||[]).map(c=>c.name.replace(/^NVIDIA /,''));
+  let sub;
+  if(total>0){
+    sub=(cards.length?cards.join(', '):'GPU')+' at '+g.toFixed(2)+' Gj/s.';
+  }else if(L.status==='starting'){
+    sub='Solver starting, first speed report pending.';
+  }else if(L.last_mkeys){
+    sub='Solver idle. Last reported '+(L.last_mkeys/1000).toFixed(2)+' Gj/s '+ago(L.age)+
+        (L.last_at?', at '+clock(L.last_at):'')+'.';
+  }else{
+    sub='No solver has reported on this machine.';
+  }
+  document.getElementById('ro-sub').textContent=sub;
+
+  // remaining work at the current rate, from operations rather than DP count
+  const opsLeft=Math.max(0,D.ops_needed-D.banked_ops);
+  const eta=total>0?opsLeft/(total*1e6):Infinity;
+  const h=D.history||{t:[]}, n=h.t.length;
+  // Table growth from the measured rate, not from differencing the record
+  // count: a walk banks one point every 2^dp group operations, so the rate
+  // gives the growth exactly, and only while the solver is actually running.
+  const dpRate = (D.rate_mjs>0) ? D.rate_mjs*1e6*3600/Math.pow(2,D.dpBits||28) : null;
+  document.getElementById('ro-facts').innerHTML=[
+    ['points banked',fmt(D.count)],
+    ['share of expected work',sci(D.ops_progress,2)],
+    ['expected solve at this rate',dur(eta)],
+    ['table growth',dpRate?compact(dpRate)+' DP/h':'–']
+  ].map(([k,v])=>'<div class="fact"><span class="fk">'+k+'</span>'+
+                 '<span class="fv">'+v+'</span></div>').join('');
+
+  renderSpark(h);
+}
+
+function renderSpark(h){
+  if(CH.rate.scrubbed) return;       // hold the picture still while it is read
+  const el=document.getElementById('ro-spark'), n=h.t?h.t.length:0;
+  const lo=document.getElementById('spark-lo');
+  if(n<3){ el.innerHTML=''; el.style.display='none'; lo.textContent='collecting rate history';
+    document.getElementById('spark-hi').textContent=''; return; }
+  el.style.display='';
+  const tot=h.rate.map(v=>v/1000);
+  const mx=Math.max(...tot), span0=h.t[n-1]-h.t[0];
+  const dspan=x=>x>=3600?(x/3600).toFixed(1)+'h':Math.round(x/60)+'m';
+  if(!(mx>0)){ el.innerHTML=''; el.style.display='none';
+    document.getElementById('spark-hi').textContent='';
+    lo.textContent='no rate recorded in the last '+dspan(span0); return; }
+  document.getElementById('spark-hi').textContent='now';
+  const W=320,H=52;
+  const x=i=>i/(n-1)*W, y=v=>H-2-(v/mx)*(H-10);
+  let d='M'+x(0).toFixed(1)+' '+y(tot[0]).toFixed(1);
+  for(let i=1;i<n;i++) d+=' L'+x(i).toFixed(1)+' '+y(tot[i]).toFixed(1);
+  el.innerHTML=
+    '<path d="'+d+' L'+W+' '+H+' L0 '+H+' Z" fill="var(--state)" opacity=".12"/>'+
+    '<path d="'+d+'" fill="none" stroke="var(--state)" stroke-width="2" stroke-linejoin="round"/>'+
+    '<circle cx="'+x(n-1).toFixed(1)+'" cy="'+y(tot[n-1]).toFixed(1)+'" r="4" fill="var(--state)" '+
+    'stroke="var(--panel)" stroke-width="2"/>';
+  lo.textContent=dspan(span0)+' · peak '+mx.toFixed(2)+' Gj/s';
+
+  // Remember what was drawn so scrubbing can read values back out without
+  // recomputing the layout. Redrawing happens on every poll, so this is
+  // refreshed with the picture rather than going stale beside it.
+  CH.rate.st={t:h.t.slice(), v:tot, xs:h.t.map((_,i)=>x(i)), ys:tot.map(v=>y(v)),
+              W:W, H:H, axisLo:lo.textContent};
+  attachScrub(CH.rate, el);
+}
+
+/* -------------------------------------------------- scrubbing the charts */
+/* Click or drag anywhere on the history chart to read the value at that
+   moment, the way a price chart does. Pointer events cover mouse and touch
+   with one path; releasing or leaving snaps back to the live figure. */
+
+function chartRestore(c){
+  if(!c.scrubbed) return;
+  c.scrubbed=false;
+  const g=document.getElementById(c.xh); if(g) g.setAttribute('opacity','0');
+  document.getElementById(c.fig).classList.remove('scrub');
+  const hi=document.getElementById(c.hi);
+  hi.textContent='now'; hi.classList.remove('live');
+  if(c.st) document.getElementById(c.lo).textContent=c.st.axisLo;
+  if(typeof CUR!=='undefined' && CUR) renderHero(CUR);
+}
+
+function chartAt(c, clientX, el){
+  const st=c.st;
+  if(!st || st.v.length<2) return;
+  const r=el.getBoundingClientRect();
+  if(!r.width) return;
+  let f=(clientX-r.left)/r.width;
+  f=Math.max(0,Math.min(1,f));
+  const px=f*st.W;
+
+  // nearest plotted sample
+  let k=0, best=Infinity;
+  for(let j=0;j<st.xs.length;j++){
+    const d=Math.abs(st.xs[j]-px);
+    if(d<best){ best=d; k=j; }
+  }
+  const v=st.v[k], ts=st.t[k];
+
+  let g=document.getElementById(c.xh);
+  if(!g){
+    g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('id',c.xh);
+    g.innerHTML='<line class="xh" y1="0" y2="'+st.H+'"></line>'+
+                '<circle r="4" fill="var(--panel)" stroke="var(--state)" stroke-width="2"></circle>';
+    el.appendChild(g);
+  }
+  g.setAttribute('opacity','1');
+  const ln=g.querySelector('line'), ci=g.querySelector('circle');
+  ln.setAttribute('x1',st.xs[k]); ln.setAttribute('x2',st.xs[k]);
+  ci.setAttribute('cx',st.xs[k]);  ci.setAttribute('cy',st.ys[k]);
+
+  c.scrubbed=true;
+  const fig=document.getElementById(c.fig);
+  fig.classList.add('scrub');
+  fig.innerHTML=v.toFixed(c.dp)+'<span class="ro-u">'+c.unit+'</span>';
+
+  const d=new Date(ts*1000);
+  const ago=Math.max(0,Math.round((Date.now()/1000-ts)/60));
+  const when=ago<1?'just now':(ago<60?ago+'m ago':(ago/60).toFixed(1)+'h ago');
+  const hi=document.getElementById(c.hi);
+  hi.textContent=d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  hi.classList.add('live');
+  document.getElementById(c.lo).textContent=when;
+}
+
+function attachScrub(c, el){
+  if(el.__scrubBound) return;          // survives every redraw
+  el.__scrubBound=true;
+  const move=e=>{ chartAt(c, e.clientX, el); e.preventDefault(); };
+  const off =()=>chartRestore(c);
+  el.addEventListener('pointerdown', e=>{ el.setPointerCapture(e.pointerId); move(e); });
+  el.addEventListener('pointermove', e=>{ if(e.buttons||e.pointerType==='mouse') move(e); });
+  el.addEventListener('pointerup',   e=>{ try{el.releasePointerCapture(e.pointerId);}catch(_){} });
+  el.addEventListener('pointerleave', off);
+  el.addEventListener('pointercancel', off);
+}
+
+/* ------------------------------------------------------------- the band */
+function pcts(bins){                       // 25/50/75 over the in-band records
+  const tot=bins.reduce((a,b)=>a+b,0); if(!tot) return null;
+  const want=[.25,.5,.75], out=[]; let run=0, k=0;
+  for(let i=0;i<bins.length&&k<3;i++){ run+=bins[i];
+    while(k<3&&run/tot>=want[k]){ out.push(i); k++; } }
+  while(out.length<3) out.push(bins.length-1);
+  return out;
+}
+function renderBand(D){
+  const N=D.cov_tame.length, lo=D.cov_lo, hi=D.cov_hi, step=D.step||1;
+  const W=1200,H=320,mid=H/2,half=mid-42,bw=W/N;   // 42 leaves the annotation lane
+  const mt=Math.max(...D.cov_tame,1), mw=Math.max(...D.cov_wild,1);
+  const bar=Math.max(bw-2,0.6);
+  let s='';
+  for(let i=0;i<N;i++){
+    const x=(i*bw+1).toFixed(2);
+    const th=D.cov_tame[i]/mt*half, wh=D.cov_wild[i]/mw*half;
+    if(th>0.3) s+='<rect x="'+x+'" y="'+(mid-2-th).toFixed(2)+'" width="'+bar.toFixed(2)+
+      '" height="'+th.toFixed(2)+'" rx="1.4" fill="var(--tame)"/>';
+    if(wh>0.3) s+='<rect x="'+x+'" y="'+(mid+2).toFixed(2)+'" width="'+bar.toFixed(2)+
+      '" height="'+wh.toFixed(2)+'" rx="1.4" fill="var(--wild)"/>';
+  }
+  const zero=(0-lo)/(hi-lo)*W;
+  s+='<line x1="0" y1="'+mid+'" x2="'+W+'" y2="'+mid+'" stroke="var(--line-2)" stroke-width="1"/>';
+  s+='<line x1="'+zero.toFixed(1)+'" y1="'+(mid-half-6)+'" x2="'+zero.toFixed(1)+'" y2="'+
+     (mid+half+6)+'" stroke="var(--line-2)" stroke-width="1" opacity=".7"/>';
+  document.getElementById('band').innerHTML=s;
+
+  const u=i=>lo+(hi-lo)*(i+0.5)/N;
+  const pt=pcts(D.cov_tame), pw=pcts(D.cov_wild);
+  function annotate(herd,p,lab,brk,zone){
+    if(!p){ lab.textContent=''; brk.style.display='none'; return; }
+    const a=p[0]/N, b=(p[2]+1)/N, wrapW=lab.parentElement.clientWidth;
+    brk.style.display=''; brk.style.left=(a*100).toFixed(2)+'%';
+    brk.style.width=((b-a)*100).toFixed(2)+'%';
+    lab.textContent='half the '+herd+' within '+u(p[0]).toFixed(1)+' and '+u(p[2]).toFixed(1);
+    // clamp in pixels off the measured widths, so the label can never sit on
+    // top of the herd tag at the left edge
+    const lw=lab.offsetWidth, zw=zone ? zone.offsetWidth : 0;
+    let px=(a+b)/2*wrapW;
+    px=Math.max(zw+18+lw/2, Math.min(wrapW-lw/2-2, px));
+    lab.style.left=px.toFixed(1)+'px';
+  }
+  annotate('tames',pt,document.getElementById('pk-t'),document.getElementById('iqr-t'),
+    document.querySelector('.zone.t'));
+  annotate('wilds',pw,document.getElementById('pk-w'),document.getElementById('iqr-w'),
+    document.querySelector('.zone.w'));
+  document.getElementById('band-zero').style.left=(zero/W*100).toFixed(2)+'%';
+  const unit=' · 2<sup>'+((D.range_bits||139)-5)+'</sup>';
+  document.getElementById('unit-exp').textContent=(D.range_bits||139)-5;
+  document.getElementById('band-lo').innerHTML=lo.toFixed(0)+unit;
+  document.getElementById('band-hi').innerHTML='+'+hi.toFixed(0)+unit;
+  document.getElementById('band').setAttribute('aria-label',
+    'Tame distances centre near '+(pt?u(pt[1]).toFixed(1):'0')+' units; wild distances spread across '+
+    (pw?u(pw[0]).toFixed(1)+' to '+u(pw[2]).toFixed(1):'the band')+' units.');
+
+  // Records outside the drawn window are not suspect, they are just outside the
+  // window: the next scan widens it to fit them. Say so plainly and move on.
+  const outT=D.tame_out*step, outW=D.wild_out*step, out=outT+outW;
+  const nb=D.band_next;
+  document.getElementById('band-flag').innerHTML = out<=0 ? '' :
+    '<p class="note" style="margin-top:16px">'+compact(out)+' records sit outside this window ('+
+    compact(outT)+' tame, '+compact(outW)+' wild) and are not drawn. Measured spread is '+
+    D.dmin_u.toFixed(1)+' to '+D.dmax_u.toFixed(1)+' units'+
+    (nb?', so the next scan draws '+nb[0].toFixed(0)+' to +'+nb[1].toFixed(0):'')+'.</p>';
+
+  const rows=[['tame',D.tame,outT,pt,mt],['wild',D.wild,outW,pw,mw]].map(([nm,tot,o,p,mx])=>
+    '<tr><td class="hi">'+nm+'</td><td>'+fmt(tot)+'</td><td>'+compact(Math.max(0,tot-o))+'</td>'+
+    '<td>'+(p?u(p[0]).toFixed(2):'–')+'</td>'+
+    '<td>'+(p?u(p[1]).toFixed(2):'–')+'</td><td>'+(p?u(p[2]).toFixed(2):'–')+'</td>'+
+    '<td>'+compact(mx*step)+'</td></tr>').join('');
+  document.getElementById('band-tbl').innerHTML=
+    '<thead><tr><th>herd</th><th>records</th><th>in window</th><th>25th</th><th>median</th>'+
+    '<th>75th</th><th>tallest bin</th></tr></thead><tbody>'+rows+'</tbody>'+
+    '<tfoot><tr><td colspan="7" style="color:var(--ink-3);border:0;padding-top:10px">'+
+    'Percentiles in units of 2^'+((D.range_bits||139)-5)+', over the records inside the window. Bin heights estimated from a '+
+    (step>1?'1 in '+step+' sample':'full pass')+'.</td></tr></tfoot>';
+}
+
+/* -------------------------------------------------------------- the rails */
+function rail(el,have,need,fmtV){
+  const maxE=Math.max(1,Math.ceil(Math.log10(need))), pct=e=>Math.max(0,Math.min(100,e/maxE*100));
+  const hE=have>0?Math.log10(have):0, nE=Math.log10(need);
+  let h='<div class="rail-track"><i style="width:'+pct(hE).toFixed(2)+'%"></i></div>';
+  const stride=maxE>14?3:2;
+  for(let e=0;e<=maxE;e+=stride){
+    h+='<div class="rail-tick" style="left:'+pct(e).toFixed(2)+'%"></div>'+
+       '<div class="rail-tlab" style="left:'+pct(e).toFixed(2)+'%">10'+sup(e)+'</div>';
+  }
+  const mk=(cls,p,lab,val)=>'<div class="rail-mk '+cls+'" style="left:'+p.toFixed(2)+'%"></div>'+
+    '<div class="rail-lab'+(p>84?' right':'')+'" style="left:'+p.toFixed(2)+'%"><i>'+lab+'</i>'+val+'</div>';
+  h+=mk('now',pct(hE),'now',fmtV(have))+mk('goal',pct(nE),'expected',fmtV(need));
+  el.innerHTML=h;
+}
+
+function renderProgress(D){
+  document.getElementById('need-ops').textContent=sci(D.ops_needed,1);
+  document.getElementById('need-dps').textContent=sci(D.dps_needed,1);
+  document.getElementById('need-dp').textContent=D.dpBits;
+  rail(document.getElementById('rail-dp'),D.count,D.dps_needed,v=>compact(v));
+  rail(document.getElementById('rail-ops'),D.banked_ops,D.ops_needed,v=>sci(v,1));
+  document.getElementById('frac').textContent=sci(D.ops_progress,2);
+
+}
+
+/* --------------------------------------------------------- the mix field */
+let FIELD=null;
+function renderField(D){
+  const cells=D.cells||[];
+  let T=0,Wd=0; for(const c of cells){ T+=c[2]; Wd+=c[3]; }
+  const p=(T+Wd)?Wd/(T+Wd):0;
+  let sum=0,sq=0,k=0,worst=0,worstC=null,thin=0;
+  const zs=new Map();
+  for(const c of cells){
+    const n=c[2]+c[3];
+    if(n<8){ thin++; continue; }
+    const sd=Math.sqrt(p*(1-p)/n), z=sd>0?((c[3]/n)-p)/sd:0;
+    zs.set(c[0]+'_'+c[1],[z,c[2],c[3]]);
+    sum+=z; sq+=z*z; k++;
+    if(Math.abs(z)>Math.abs(worst)){ worst=z; worstC=c; }
+  }
+  const spread=k>1?Math.sqrt(sq/k-Math.pow(sum/k,2)):0;
+  FIELD={zs:zs,gc:D.gridN_c||72,gr:D.gridN_r||40};
+  drawField();
+
+  document.getElementById('grid-dims').textContent=(D.gridN_c||72)+'×'+(D.gridN_r||40);
+  document.getElementById('field-stats').innerHTML=[
+    ['wild share of the whole table',(p*100).toFixed(2)+'%'],
+    ['spread of cell mixes',spread.toFixed(2)],
+    ['furthest cell',(worst>0?'+':'')+worst.toFixed(1)+'σ'+(worstC?' at '+worstC[0]+','+worstC[1]:'')],
+    ['cells too thin to judge',fmt(thin)+' of '+fmt(cells.length)]
+  ].map(([a,b])=>'<span>'+a+'</span><b>'+b+'</b>').join('');
+
+  const ramp=document.getElementById('scale-ramp');
+  ramp.innerHTML=[-3,-2,-1,0,1,2,3].map(z=>'<i style="background:'+zcol(z)+'"></i>').join('');
+}
+function zcol(z){
+  const t=hex2rgb(col('--tame')), w=hex2rgb(col('--wild')), m=hex2rgb(col('--mid'));
+  const f=Math.max(-1,Math.min(1,z/3)), a=Math.pow(Math.abs(f),1.6);
+  return f<0?mix(m,t,a):mix(m,w,a);
+}
+function drawField(){
+  if(!FIELD) return;
+  const cv=document.getElementById('field'), ctx=cv.getContext('2d');
+  const {gc,gr,zs}=FIELD, dpr=Math.min(window.devicePixelRatio||1,2);
+  const cw=cv.clientWidth||720, ch=Math.round(cw*gr/gc);
+  cv.width=cw*dpr; cv.height=ch*dpr; cv.style.height=ch+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,cw,ch);
+  const cwc=cw/gc, chc=ch/gr, gap=Math.min(1.5,cwc*0.14), r=Math.min(2.5,cwc*0.22);
+  const empty=col('--line');
+  for(let c=0;c<gc;c++) for(let rr=0;rr<gr;rr++){
+    const v=zs.get(c+'_'+rr);
+    ctx.fillStyle=v?zcol(v[0]):empty;
+    const x=c*cwc+gap/2, y=rr*chc+gap/2, w=cwc-gap, hh=chc-gap;
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(x,y,w,hh,r); else ctx.rect(x,y,w,hh);
+    ctx.fill();
+  }
+}
+
+/* --------------------------------------------------------- walk quality */
+function renderWalk(D){
+  const xs=D.xhist, M=xs.length, W=480,H=120;
+  const tot=xs.reduce((a,b)=>a+b,0), e=tot/M, sd=Math.sqrt(e*(1-1/M));
+  const top=Math.max(...xs,e+4*sd), bot=Math.max(0,Math.min(...xs,e-4*sd));
+  const y=v=>H-4-((v-bot)/Math.max(top-bot,1e-9))*(H-8);
+  const x=i=>i/(M-1)*W;
+  let d='M0 '+y(xs[0]).toFixed(1);
+  for(let i=1;i<M;i++) d+=' L'+x(i).toFixed(1)+' '+y(xs[i]).toFixed(1);
+  const hi=y(e+3*sd), loY=y(e-3*sd);
+  document.getElementById('walk').innerHTML=
+    '<rect class="walk-band" x="0" y="'+hi.toFixed(1)+'" width="'+W+'" height="'+
+      (loY-hi).toFixed(1)+'" rx="2"/>'+
+    '<line class="walk-mean" x1="0" y1="'+y(e).toFixed(1)+'" x2="'+W+'" y2="'+y(e).toFixed(1)+'"/>'+
+    '<path class="walk-line" d="'+d+'"/>';
+  let chi=0, outside=0;
+  for(const v of xs){ chi+=Math.pow(v-e,2)/Math.max(e,1e-9); if(Math.abs(v-e)>3*sd) outside++; }
+  const cd=chi/(M-1);
+  const verdict=cd<1.3?'even, as chance would have it'
+    :cd<2.5?'slightly uneven for pure chance':'measurably uneven for pure chance';
+  document.getElementById('walk-stats').innerHTML=[
+    ['χ² per degree of freedom',cd.toFixed(2)],
+    ['buckets outside the lane',outside+' of '+M],
+    ['mean per bucket',compact(e*(D.step||1))],
+    ['reading',verdict]
+  ].map(([a,b])=>'<span>'+a+'</span><b>'+b+'</b>').join('');
+  document.getElementById('walk').setAttribute('aria-label',
+    'Byte 11 distribution, chi-square per degree of freedom '+(chi/(M-1)).toFixed(2)+
+    ', '+outside+' of '+M+' buckets outside three standard deviations.');
+
+  renderOcc(D);
+  const t=D.tame||0, w=D.wild||0, s=t+w||1;
+  document.getElementById('bal').innerHTML=
+    '<i class="bal-t" style="flex:'+t+'"></i><i class="bal-w" style="flex:'+w+'"></i>';
+  document.getElementById('bal-lab').innerHTML=
+    '<span class="li"><span class="mk bal-t"></span>tame '+(t/s*100).toFixed(1)+'%</span>'+
+    '<span class="li"><span class="mk bal-w"></span>wild '+(w/s*100).toFixed(1)+'%</span>';
+  document.getElementById('bal-note').textContent=
+    '1 tame per '+(w/Math.max(t,1)).toFixed(2)+' wilds · SOTA target 2.00';
+}
+
+/* --------------------------------------------------------------- machine */
+function renderOcc(D){
+  const xs=D.ihist||[], M=xs.length;
+  const stats=document.getElementById('occ-stats');
+  if(!M){ stats.innerHTML=''; return; }
+  const W=480,H=90, tot=xs.reduce((a,b)=>a+b,0), e=tot/M, sd=Math.sqrt(Math.max(e,1));
+  const top=Math.max(...xs,e+4*sd), bot=Math.min(...xs,Math.max(0,e-4*sd));
+  const y=v=>H-4-((v-bot)/Math.max(top-bot,1e-9))*(H-8), x=i=>i/(M-1)*W;
+  let d='M0 '+y(xs[0]).toFixed(1);
+  for(let i=1;i<M;i++) d+=' L'+x(i).toFixed(1)+' '+y(xs[i]).toFixed(1);
+  document.getElementById('occ').innerHTML=
+    '<rect class="walk-band" x="0" y="'+y(e+3*sd).toFixed(1)+'" width="'+W+'" height="'+
+      (y(e-3*sd)-y(e+3*sd)).toFixed(1)+'" rx="2"/>'+
+    '<line class="walk-mean" x1="0" y1="'+y(e).toFixed(1)+'" x2="'+W+'" y2="'+y(e).toFixed(1)+'"/>'+
+    '<path class="walk-line" d="'+d+'"/>';
+  // The split that most separates the two sides. Both sides need enough buckets
+  // to have a stable mean, or the last few buckets always win on noise.
+  const EDGE=16;
+  let best=0, bi=0, pre=0;
+  for(let i=1;i<M;i++){
+    pre+=xs[i-1];
+    if(i<EDGE||i>M-EDGE) continue;
+    const a=pre/i, b=(tot-pre)/(M-i);
+    if(Math.abs(a-b)>best){ best=Math.abs(a-b); bi=i; }
+  }
+  const chi=xs.reduce((a,v)=>a+Math.pow(v-e,2)/Math.max(e,1e-9),0)/(M-1);
+  const rel=e?best/e*100:0;
+  stats.innerHTML=[
+    ['χ² per degree of freedom',chi.toFixed(2)],
+    ['sharpest step',rel<1.5?'none worth naming':'0x'+bi.toString(16).toUpperCase()
+      .padStart(2,'0')+', '+rel.toFixed(1)+'% across it'],
+    ['reading',rel<1.5?'even across the index':'uneven across the index']
+  ].map(([a,b])=>'<span>'+a+'</span><b>'+b+'</b>').join('');
+}
+
+function renderGPU(g){
+  const el=document.getElementById('gpus');
+  if(!g||g.error||!(g.cards||[]).length){ el.innerHTML='<h2>GPU</h2><p class="note">nvidia-smi unavailable'+
+    (g&&g.error?': '+g.error:'')+'</p>'; return; }
+  const n=(v,d)=>v==null?'–':(+v).toFixed(d==null?0:d);
+  const p=(a,b)=>(a!=null&&b)?Math.max(0,Math.min(100,a/b*100)):0;
+  const tile=(k,v,s,bar,sev)=>'<div class="gpu-tile"><div class="k">'+k+'</div><div class="v">'+v+
+    '</div>'+(s?'<div class="s">'+s+'</div>':'')+
+    (bar!=null?'<div class="meter'+(sev?' '+sev:'')+'"><i style="width:'+bar.toFixed(1)+
+      '%"></i></div>':'')+'</div>';
+  el.innerHTML=g.cards.map((c,i)=>{
+    const pw=p(c.power,c.power_limit);
+    return '<h2'+(i?' style="margin-top:34px"':'')+'>'+c.name+
+      (g.cards.length>1?' <span class="hu">· GPU '+c.index+'</span>':'')+'</h2>'+
+      '<div class="gpu-grid">'+[
+      tile('temperature',n(c.temp)+' °C',null,p(c.temp,100),c.temp>=80?'bad':c.temp>=70?'warn':''),
+      tile('power draw',n(c.power)+' W','cap '+n(c.power_limit)+' W',pw,pw>98?'warn':''),
+      tile('memory',n(c.mem_used/1024,1)+' GB','of '+n(c.mem_total/1024,1)+' GB',
+        p(c.mem_used,c.mem_total)),
+      tile('utilization',n(c.util)+' %',null,p(c.util,100)),
+      tile('fan',n(c.fan)+' %',null,p(c.fan,100)),
+      tile('sm clock',n(c.clock)+' MHz')
+    ].join('')+'</div>';
+  }).join('');
+}
+
+/* ---------------------------------------------------------------- footer */
+function renderFoot(D){
+  document.getElementById('specs').innerHTML=[
+    'range 2'+sup(D.range_bits||139),'dp '+D.dpBits,'jumps '+D.nJumps,'K 1.15',
+    'table '+compact(D.count)+' DP','scan '+(D.sampled?'1 in '+D.step:'full')
+  ].map(s=>'<span>'+s+'</span>').join('');
+  document.getElementById('foot-txt').innerHTML=
+    '<b>Source:</b> the live table <span class="mono">'+(D.store||'')+'</span>, its header re-read on '+
+    'every refresh and its body rescanned in the background'+
+    (D.scan_at?' (last scan '+clock(D.scan_at)+')':'')+'. '+
+    'The rate is the solver log cross-checked against a running process, so a stopped run reads as '+
+    'zero rather than repeating its last line. The table persists between runs: every session adds '+
+    'to these counts. Served on localhost only.';
+}
+
+/* ---------------------------------------------------------- solved state */
+function renderSolved(D){
+  const b=document.getElementById('solved');
+  if(!D.solved){ b.classList.remove('on'); return; }
+  b.innerHTML='🎉 Key found · '+(D.name||'search')+' solved'+
+    (D.solved_at?' at '+new Date(D.solved_at*1000).toLocaleString():'')+
+    '<span class="sub">the private key is in '+(D.results||'data/RESULTS.TXT')+' on this machine</span>';
+  b.classList.add('on');
+  if(!document.title.startsWith('🎉')) document.title='🎉 SOLVED · '+document.title;
+}
+
+/* ------------------------------------------------------------ interaction */
+(function(){
+  const band=document.getElementById('band'), wrap=band.parentElement;
+  const tip=document.getElementById('btip'), cross=document.getElementById('cross');
+  wrap.addEventListener('pointermove',ev=>{
+    if(!CUR) return;
+    const r=band.getBoundingClientRect(), N=CUR.cov_tame.length;
+    const f=(ev.clientX-r.left)/r.width;
+    if(f<0||f>1){ tip.style.opacity=0; cross.style.opacity=0; return; }
+    const i=Math.min(N-1,Math.floor(f*N)), lo=CUR.cov_lo, hi=CUR.cov_hi, st=CUR.step||1;
+    const a=lo+(hi-lo)*i/N, b=lo+(hi-lo)*(i+1)/N;
+    tip.textContent=a.toFixed(2)+' to '+b.toFixed(2)+' · tame '+compact(CUR.cov_tame[i]*st)+
+      ' · wild '+compact(CUR.cov_wild[i]*st);
+    const p=wrap.getBoundingClientRect();
+    tip.style.left=(ev.clientX-p.left)+'px'; tip.style.top=(ev.clientY-p.top)+'px'; tip.style.opacity=1;
+    cross.style.left=((i+0.5)/N*r.width).toFixed(1)+'px'; cross.style.opacity=1;
+  });
+  wrap.addEventListener('pointerleave',()=>{ tip.style.opacity=0; cross.style.opacity=0; });
+
+  const cv=document.getElementById('field'), ft=document.getElementById('ftip');
+  cv.addEventListener('pointermove',ev=>{
+    if(!FIELD) return;
+    const r=cv.getBoundingClientRect();
+    const c=Math.floor((ev.clientX-r.left)/(r.width/FIELD.gc));
+    const rr=Math.floor((ev.clientY-r.top)/(r.height/FIELD.gr));
+    const v=FIELD.zs.get(c+'_'+rr);
+    if(!v){ ft.style.opacity=0; return; }
+    ft.textContent='cell '+c+','+rr+' · tame '+v[1]+' · wild '+v[2]+' · '+
+      (v[0]>0?'+':'')+v[0].toFixed(1)+'σ';
+    const p=cv.parentElement.getBoundingClientRect();
+    ft.style.left=(ev.clientX-p.left)+'px'; ft.style.top=(ev.clientY-p.top)+'px'; ft.style.opacity=1;
+  });
+  cv.addEventListener('pointerleave',()=>ft.style.opacity=0);
+
+  let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(drawField,120); });
+
+  const btn=document.getElementById('theme-btn');
+  const saved=localStorage.getItem('kf-theme');
+  if(saved) document.documentElement.dataset.theme=saved;
+  btn.addEventListener('click',()=>{
+    const dark=matchMedia('(prefers-color-scheme:dark)').matches;
+    const cur=document.documentElement.dataset.theme||(dark?'dark':'light');
+    const next=cur==='dark'?'light':'dark';
+    document.documentElement.dataset.theme=next;
+    localStorage.setItem('kf-theme',next);
+    if(CUR){ renderField(CUR); }
+  });
+})();
+
+/* ------------------------------------------------------------------ poll */
+function render(D){
+  CUR=D;
+  renderSolved(D); applyState(D); renderHero(D); renderBand(D);
+  renderProgress(D); renderField(D); renderWalk(D);
+  renderGPU(D.gpu); renderFoot(D);
+  document.getElementById('tb-id').textContent=(D.name?D.name+' · ':'')+'secp256k1';
+  document.getElementById('eyebrow').innerHTML='interval ECDLP · SOTA v2 · 2<sup>'+(D.range_bits||139)+'</sup> wide';
+}
+async function tick(){
+  const meta=document.getElementById('tb-meta');
+  try{
+    const r=await fetch('/data.json?_='+Date.now(),{cache:'no-store'});
+    const D=await r.json();
+    if(D.error){ meta.textContent='table error: '+D.error; return; }
+    render(D);
+    meta.textContent='refreshed '+new Date().toLocaleTimeString([],{hour12:false});
+  }catch(e){
+    document.body.dataset.state='stalled';
+    document.getElementById('chip-txt').textContent='no server';
+    meta.textContent='the dashboard server is not answering';
+  }
+}
+tick(); setInterval(tick,POLL_MS);
+</script>
